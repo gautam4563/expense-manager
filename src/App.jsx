@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import './App.css'
+import { signInWithGoogle } from './firebase'
 
 function GoogleIcon() {
   return (
@@ -58,6 +59,16 @@ function App() {
   const [rows, setRows] = useState([
     { date: '', amount: '', type: '', typeCustom: '', source: '', sourceCustom: '', category: '', categoryCustom: '', description: '' },
   ])
+
+  const handleGoogleLogin = async () => {
+    try {
+      const result = await signInWithGoogle()
+      console.log('User email:', result.user.email)
+      setIsLoggedIn(true)
+    } catch (error) {
+      console.error('Google login failed:', error)
+    }
+  }
 
   const updateRow = (index, field, value) => {
     setRows((currentRows) =>
@@ -292,7 +303,7 @@ function App() {
         <h1>Welcome back</h1>
         <p>Sign in to your expense manager</p>
 
-        <button type="button" className="google-button" onClick={() => setIsLoggedIn(true)}>
+        <button type="button" className="google-button" onClick={handleGoogleLogin}>
           <GoogleIcon />
           <span>Continue with Google</span>
         </button>
