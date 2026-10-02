@@ -1,6 +1,7 @@
 import { useState } from 'react'
+import { addDoc, collection, deleteDoc, doc, getDocs, serverTimestamp } from 'firebase/firestore'
 import './App.css'
-import { signInWithGoogle } from './firebase'
+import { auth, db, signInWithGoogle } from './firebase'
 
 function GoogleIcon() {
   return (
@@ -53,6 +54,7 @@ function ExpenseLogo() {
 
 function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false)
+  const [currentUser, setCurrentUser] = useState(null)
   const [typeOptions, setTypeOptions] = useState(['Credit', 'Debit'])
   const [sourceOptions, setSourceOptions] = useState(['PNB Bank', 'HDFC', 'SBI', 'Wallet', 'Other'])
   const [categoryOptions, setCategoryOptions] = useState(['Home', 'Travel', 'Education', 'Gym', 'Other'])
@@ -60,13 +62,98 @@ function App() {
     { date: '', amount: '', type: '', typeCustom: '', source: '', sourceCustom: '', category: '', categoryCustom: '', description: '' },
   ])
 
+  const loadUserExpenses = async (user) => {
+    if (!user || !user.email) return
+
+    const userEmailKey = user.email.trim().toLowerCase()
+
+    try {
+      const snapshot = await getDocs(collection(db, userEmailKey))
+      const savedRows = snapshot.docs.map((doc) => {
+        const data = doc.data()
+
+        return {
+          id: doc.id,
+          date: data.date || '',
+          amount: data.amount ? String(data.amount) : '',
+          type: data.type || '',
+          typeCustom: '',
+          source: data.source || '',
+          sourceCustom: '',
+          category: data.category || '',
+          categoryCustom: '',
+          description: data.description || '',
+        }
+      })
+
+      setRows(savedRows.length > 0 ? savedRows : [{
+        date: '',
+        amount: '',
+        type: '',
+        typeCustom: '',
+        source: '',
+        sourceCustom: '',
+        category: '',
+        categoryCustom: '',
+        description: '',
+      }])
+    } catch (error) {
+      console.error('Error loading expenses:', error)
+    }
+  }
+
   const handleGoogleLogin = async () => {
     try {
       const result = await signInWithGoogle()
-      console.log('User email:', result.user.email)
+      const user = result.user
+      console.log('User email:', user.email)
+      setCurrentUser(user)
+      await loadUserExpenses(user)
       setIsLoggedIn(true)
     } catch (error) {
       console.error('Google login failed:', error)
+    }
+  }
+
+  const saveExpenses = async () => {
+    if (!currentUser || !currentUser.email) return
+
+    const userEmailKey = currentUser.email.trim().toLowerCase()
+    const expensesToSave = rows.filter((row) => {
+      if (row.id) return false
+
+      return (
+        row.date ||
+        row.amount ||
+        row.type ||
+        row.source ||
+        row.category ||
+        row.description ||
+        row.typeCustom ||
+        row.sourceCustom ||
+        row.categoryCustom
+      )
+    })
+
+    if (expensesToSave.length === 0) return
+
+    try {
+      for (const row of expensesToSave) {
+        await addDoc(collection(db, userEmailKey), {
+          date: row.date,
+          amount: Number(row.amount) || 0,
+          type: row.type,
+          source: row.source,
+          category: row.category,
+          description: row.description,
+          createdAt: serverTimestamp(),
+        })
+      }
+
+      console.log('Expenses saved to Firestore for:', currentUser.email)
+      await loadUserExpenses(currentUser)
+    } catch (error) {
+      console.error('Error saving expenses:', error)
     }
   }
 
@@ -137,6 +224,36 @@ function App() {
     ])
   }
 
+  const deleteRow = async (rowIndex) => {
+    if (!currentUser || !currentUser.email) return
+
+    const rowToDelete = rows[rowIndex]
+    const userEmailKey = currentUser.email.trim().toLowerCase()
+
+    if (rowToDelete?.id) {
+      try {
+        await deleteDoc(doc(db, userEmailKey, rowToDelete.id))
+      } catch (error) {
+        console.error('Error deleting expense:', error)
+      }
+    }
+
+    setRows((currentRows) => {
+      const nextRows = currentRows.filter((_, index) => index !== rowIndex)
+      return nextRows.length > 0 ? nextRows : [{
+        date: '',
+        amount: '',
+        type: '',
+        typeCustom: '',
+        source: '',
+        sourceCustom: '',
+        category: '',
+        categoryCustom: '',
+        description: '',
+      }]
+    })
+  }
+
   if (isLoggedIn) {
     return (
       <main className="dashboard-page">
@@ -146,7 +263,10 @@ function App() {
               <button type="button" className="nav-link active">Home</button>
             </nav>
 
-            <button type="button" className="logout-button" onClick={() => setIsLoggedIn(false)}>
+            <button type="button" className="logout-button" onClick={() => {
+              setIsLoggedIn(false)
+              setCurrentUser(null)
+            }}>
               Log out
             </button>
           </header>
@@ -154,6 +274,9 @@ function App() {
           <div className="sheet-toolbar">
             <button type="button" className="add-row-button" onClick={addRow}>
               + Add row
+            </button>
+            <button type="button" className="add-row-button" onClick={saveExpenses}>
+              Save to Firestore
             </button>
           </div>
 
@@ -167,6 +290,7 @@ function App() {
                   <th>Source</th>
                   <th>Category</th>
                   <th>Description</th>
+                  <th>Action</th>
                 </tr>
               </thead>
 
@@ -214,6 +338,11 @@ function App() {
                             onBlur={(event) => {
                               saveCustomChoice(rowIndex, 'type', event.target.value)
                             }}
+                            onKeyDown={(event) => {
+                              if (event.key === 'Enter') {
+                                event.currentTarget.blur()
+                              }
+                            }}
                           />
                         )}
                       </div>
@@ -241,6 +370,11 @@ function App() {
                             onChange={(event) => updateRow(rowIndex, 'sourceCustom', event.target.value)}
                             onBlur={(event) => {
                               saveCustomChoice(rowIndex, 'source', event.target.value)
+                            }}
+                            onKeyDown={(event) => {
+                              if (event.key === 'Enter') {
+                                event.currentTarget.blur()
+                              }
                             }}
                           />
                         )}
@@ -270,6 +404,11 @@ function App() {
                             onBlur={(event) => {
                               saveCustomChoice(rowIndex, 'category', event.target.value)
                             }}
+                            onKeyDown={(event) => {
+                              if (event.key === 'Enter') {
+                                event.currentTarget.blur()
+                              }
+                            }}
                           />
                         )}
                       </div>
@@ -281,7 +420,17 @@ function App() {
                         placeholder="Description"
                         value={row.description}
                         onChange={(event) => updateRow(rowIndex, 'description', event.target.value)}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter') {
+                            event.currentTarget.blur()
+                          }
+                        }}
                       />
+                    </td>
+                    <td>
+                      <button type="button" className="delete-row-button" onClick={() => deleteRow(rowIndex)}>
+                        Delete
+                      </button>
                     </td>
                   </tr>
                 ))}
