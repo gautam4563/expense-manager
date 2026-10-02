@@ -62,6 +62,15 @@ function App() {
     { date: '', amount: '', type: '', typeCustom: '', source: '', sourceCustom: '', category: '', categoryCustom: '', description: '' },
   ])
 
+  const sortRowsByDate = (list) => {
+    return [...list].sort((a, b) => {
+      if (!a.date && !b.date) return 0
+      if (!a.date) return 1
+      if (!b.date) return -1
+      return new Date(a.date) - new Date(b.date)
+    })
+  }
+
   const loadUserExpenses = async (user) => {
     if (!user || !user.email) return
 
@@ -86,7 +95,7 @@ function App() {
         }
       })
 
-      setRows(savedRows.length > 0 ? savedRows : [{
+      setRows(sortRowsByDate(savedRows.length > 0 ? savedRows : [{
         date: '',
         amount: '',
         type: '',
@@ -96,7 +105,7 @@ function App() {
         category: '',
         categoryCustom: '',
         description: '',
-      }])
+      }]))
     } catch (error) {
       console.error('Error loading expenses:', error)
     }
@@ -159,25 +168,29 @@ function App() {
 
   const updateRow = (index, field, value) => {
     setRows((currentRows) =>
-      currentRows.map((row, rowIndex) => (rowIndex === index ? { ...row, [field]: value } : row)),
+      sortRowsByDate(
+        currentRows.map((row, rowIndex) => (rowIndex === index ? { ...row, [field]: value } : row)),
+      ),
     )
   }
 
   const updateChoice = (index, field, value) => {
     setRows((currentRows) =>
-      currentRows.map((row, rowIndex) => {
-        if (rowIndex !== index) return row
+      sortRowsByDate(
+        currentRows.map((row, rowIndex) => {
+          if (rowIndex !== index) return row
 
-        const nextRow = { ...row, [field]: value }
+          const nextRow = { ...row, [field]: value }
 
-        if (value === 'Other') {
-          nextRow[`${field}Custom`] = row[`${field}Custom`] || ''
-        } else {
-          nextRow[`${field}Custom`] = ''
-        }
+          if (value === 'Other') {
+            nextRow[`${field}Custom`] = row[`${field}Custom`] || ''
+          } else {
+            nextRow[`${field}Custom`] = ''
+          }
 
-        return nextRow
-      }),
+          return nextRow
+        }),
+      ),
     )
   }
 
@@ -205,23 +218,27 @@ function App() {
     addCustomOption(field, normalized)
 
     setRows((currentRows) =>
-      currentRows.map((row, rowIndex) => {
-        if (rowIndex !== index) return row
+      sortRowsByDate(
+        currentRows.map((row, rowIndex) => {
+          if (rowIndex !== index) return row
 
-        return {
-          ...row,
-          [field]: normalized,
-          [`${field}Custom`]: normalized,
-        }
-      }),
+          return {
+            ...row,
+            [field]: normalized,
+            [`${field}Custom`]: normalized,
+          }
+        }),
+      ),
     )
   }
 
   const addRow = () => {
-    setRows((currentRows) => [
-      ...currentRows,
-      { date: '', amount: '', type: '', typeCustom: '', source: '', sourceCustom: '', category: '', categoryCustom: '', description: '' },
-    ])
+    setRows((currentRows) =>
+      sortRowsByDate([
+        ...currentRows,
+        { date: '', amount: '', type: '', typeCustom: '', source: '', sourceCustom: '', category: '', categoryCustom: '', description: '' },
+      ]),
+    )
   }
 
   const deleteRow = async (rowIndex) => {
@@ -240,17 +257,19 @@ function App() {
 
     setRows((currentRows) => {
       const nextRows = currentRows.filter((_, index) => index !== rowIndex)
-      return nextRows.length > 0 ? nextRows : [{
-        date: '',
-        amount: '',
-        type: '',
-        typeCustom: '',
-        source: '',
-        sourceCustom: '',
-        category: '',
-        categoryCustom: '',
-        description: '',
-      }]
+      return sortRowsByDate(
+        nextRows.length > 0 ? nextRows : [{
+          date: '',
+          amount: '',
+          type: '',
+          typeCustom: '',
+          source: '',
+          sourceCustom: '',
+          category: '',
+          categoryCustom: '',
+          description: '',
+        }],
+      )
     })
   }
 
@@ -332,6 +351,7 @@ function App() {
                           <input
                             type="text"
                             className="inline-input"
+                            autoFocus
                             value={row.typeCustom || ''}
                             placeholder="Type name"
                             onChange={(event) => updateRow(rowIndex, 'typeCustom', event.target.value)}
@@ -365,6 +385,7 @@ function App() {
                           <input
                             type="text"
                             className="inline-input"
+                            autoFocus
                             value={row.sourceCustom || ''}
                             placeholder="Bank name"
                             onChange={(event) => updateRow(rowIndex, 'sourceCustom', event.target.value)}
@@ -398,6 +419,7 @@ function App() {
                           <input
                             type="text"
                             className="inline-input"
+                            autoFocus
                             value={row.categoryCustom || ''}
                             placeholder="Category"
                             onChange={(event) => updateRow(rowIndex, 'categoryCustom', event.target.value)}
